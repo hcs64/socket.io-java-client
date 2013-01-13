@@ -40,8 +40,9 @@ class XhrTransport implements IOTransport {
 	/** The queue holding elements to send. */
 	ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<String>();
 
-	/** background thread for managing the server connection. */
-	PollThread pollThread = null;
+	/** background threads for sending and recieving */
+	ReceiverThread recvThread = null;
+    SenderThread sendThread = null;
 
 	/** Indicates whether the {@link IOConnection} wants us to be connected. */
 	private boolean connect;
@@ -49,19 +50,33 @@ class XhrTransport implements IOTransport {
 	/** Indicates whether {@link PollThread} is blocked. */
 	private boolean blocked;
 
-	HttpURLConnection urlConnection;
+	HttpURLConnection sendUrlConnection;
+	HttpURLConnection recvUrlConnection;
+
+    private HttpURLConnection setupHttpURLConnection() throws MalformedURLException, IOException {
+        URL url = new URL(XhrTransport.this.url.toString() + "?t="
+                + System.currentTimeMillis());
+        HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+        SSLContext context = IOConnection.getSslContext();
+        if(recvUrlConnection instanceof HttpsURLConnection && context != null) {
+            ((HttpsURLConnection)recvUrlConnection).setSSLSocketFactory(context.getSocketFactory());
+        }
+
+        return urlConnection;
+    }
+
 
 	/**
 	 * The Class ReceiverThread.
 	 */
-	private class PollThread extends Thread {
+	private class ReceiverThread extends Thread {
 
 		private static final String CHARSET = "UTF-8";
 
 		/**
 		 * Instantiates a new receiver thread.
 		 */
-		public PollThread() {
+		public ReceiverThread() {
 			super(TRANSPORT_NAME);
 		}
 
@@ -76,16 +91,54 @@ class XhrTransport implements IOTransport {
 			while (isConnect()) {
 				try {
 					String line;
-					URL url = new URL(XhrTransport.this.url.toString() + "?t="
-							+ System.currentTimeMillis());
-					urlConnection = (HttpURLConnection) url.openConnection();
-					SSLContext context = IOConnection.getSslContext();
-					if(urlConnection instanceof HttpsURLConnection && context != null) {
-						((HttpsURLConnection)urlConnection).setSSLSocketFactory(context.getSocketFactory());
+                    recvUrlConnection = setupHttpURLConnection();
+                    InputStream plainInput = recvUrlConnection.getInputStream();
+                    BufferedReader input = new BufferedReader(
+                            new InputStreamReader(plainInput, CHARSET));
+                    while ((line = input.readLine()) != null) {
+                        if (connection != null)
+                            connection.transportData(line);
+                    }
+				} catch (IOException e) {
+					if (connection != null && interrupted() == false) {
+						connection.transportError(e);
+						return;
 					}
+				}
+				try {
+					sleep(100);
+				} catch (InterruptedException e) {
+				}
+			}
+			connection.transportDisconnected();
+        }
+    }
+
+	/**
+	 * The Class SenderThread.
+	 */
+	private class SenderThread extends Thread {
+
+		private static final String CHARSET = "UTF-8";
+
+		/**
+		 * Instantiates a new sender thread.
+		 */
+		public SenderThread() {
+			super(TRANSPORT_NAME);
+		}
+
+
+        @Override
+        public void run() {
+			while (isConnect()) {
+				try {
+					String line;
+                    sendUrlConnection = setupHttpURLConnection();
+
 					if (!queue.isEmpty()) {
-						urlConnection.setDoOutput(true);
-						OutputStream output = urlConnection.getOutputStream();
+						sendUrlConnection.setDoOutput(true);
+						OutputStream output = sendUrlConnection.getOutputStream();
 						if (queue.size() == 1) {
 							line = queue.poll();
 							output.write(line.getBytes(CHARSET));
@@ -99,36 +152,20 @@ class XhrTransport implements IOTransport {
 								iter.remove();
 							}
 						}
-						output.close();
-						InputStream input = urlConnection.getInputStream();
+						InputStream input = sendUrlConnection.getInputStream();
 						byte[] buffer = new byte[1024];
-						while(input.read(buffer) > 0) {
+                        int buffer_s;
+						while((buffer_s = input.read(buffer)) > 0) {
+                            System.out.println("buffer stuff: " + new String(buffer, 0, buffer_s));
 						}
-						input.close();
-					} else {
-						setBlocked(true);
-						InputStream plainInput = urlConnection.getInputStream();
-						BufferedReader input = new BufferedReader(
-								new InputStreamReader(plainInput, CHARSET));
-						while ((line = input.readLine()) != null) {
-							if (connection != null)
-								connection.transportData(line);
-						}
-						setBlocked(false);
-					}
-
+                    }
 				} catch (IOException e) {
 					if (connection != null && interrupted() == false) {
 						connection.transportError(e);
 						return;
 					}
 				}
-				try {
-					sleep(100);
-				} catch (InterruptedException e) {
-				}
 			}
-			connection.transportDisconnected();
 		}
 	}
 
@@ -175,8 +212,10 @@ class XhrTransport implements IOTransport {
 	@Override
 	public void connect() {
 		this.setConnect(true);
-		pollThread = new PollThread();
-		pollThread.start();
+		sendThread = new SenderThread();
+        sendThread.start();
+        recvThread = new ReceiverThread();
+		recvThread.start();
 	}
 
 	/*
@@ -187,7 +226,8 @@ class XhrTransport implements IOTransport {
 	@Override
 	public void disconnect() {
 		this.setConnect(false);
-		pollThread.interrupt();
+		sendThread.interrupt();
+        recvThread.interrupt();
 	}
 
 	/*
@@ -218,10 +258,6 @@ class XhrTransport implements IOTransport {
 	@Override
 	public void sendBulk(String[] texts) throws IOException {
 		queue.addAll(Arrays.asList(texts));
-		if (isBlocked()) {
-			pollThread.interrupt();
-			urlConnection.disconnect();
-		}
 	}
 
 	/*
@@ -251,25 +287,6 @@ class XhrTransport implements IOTransport {
 	 */
 	private synchronized void setConnect(boolean connect) {
 		this.connect = connect;
-	}
-
-	/**
-	 * Checks if is blocked.
-	 * 
-	 * @return true, if is blocked
-	 */
-	private synchronized boolean isBlocked() {
-		return blocked;
-	}
-
-	/**
-	 * Sets the blocked.
-	 * 
-	 * @param blocked
-	 *            the new blocked
-	 */
-	private synchronized void setBlocked(boolean blocked) {
-		this.blocked = blocked;
 	}
 
 	@Override
