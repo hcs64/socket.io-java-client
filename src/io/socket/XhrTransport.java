@@ -42,7 +42,7 @@ class XhrTransport implements IOTransport {
 
 	/** background threads for sending and recieving */
 	ReceiverThread recvThread = null;
-    SenderThread sendThread = null;
+	SenderThread sendThread = null;
 
 	/** Indicates whether the {@link IOConnection} wants us to be connected. */
 	private boolean connect;
@@ -50,20 +50,17 @@ class XhrTransport implements IOTransport {
 	/** Indicates whether {@link PollThread} is blocked. */
 	private boolean blocked;
 
-	HttpURLConnection sendUrlConnection;
-	HttpURLConnection recvUrlConnection;
+	private HttpURLConnection setupHttpURLConnection() throws MalformedURLException, IOException {
+		URL url = new URL(XhrTransport.this.url.toString() + "?t="
+				+ System.currentTimeMillis());
+		HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+		SSLContext context = IOConnection.getSslContext();
+		if(urlConnection instanceof HttpsURLConnection && context != null) {
+			((HttpsURLConnection)urlConnection).setSSLSocketFactory(context.getSocketFactory());
+		}
 
-    private HttpURLConnection setupHttpURLConnection() throws MalformedURLException, IOException {
-        URL url = new URL(XhrTransport.this.url.toString() + "?t="
-                + System.currentTimeMillis());
-        HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
-        SSLContext context = IOConnection.getSslContext();
-        if(recvUrlConnection instanceof HttpsURLConnection && context != null) {
-            ((HttpsURLConnection)recvUrlConnection).setSSLSocketFactory(context.getSocketFactory());
-        }
-
-        return urlConnection;
-    }
+		return urlConnection;
+	}
 
 
 	/**
@@ -90,15 +87,18 @@ class XhrTransport implements IOTransport {
 			connection.transportConnected();
 			while (isConnect()) {
 				try {
+					HttpURLConnection recvUrlConnection = setupHttpURLConnection();
+
 					String line;
-                    recvUrlConnection = setupHttpURLConnection();
-                    InputStream plainInput = recvUrlConnection.getInputStream();
-                    BufferedReader input = new BufferedReader(
-                            new InputStreamReader(plainInput, CHARSET));
-                    while ((line = input.readLine()) != null) {
-                        if (connection != null)
-                            connection.transportData(line);
-                    }
+					InputStream plainInput = recvUrlConnection.getInputStream();
+					BufferedReader input = new BufferedReader(
+							new InputStreamReader(plainInput, CHARSET));
+					while ((line = input.readLine()) != null) {
+						if (connection != null)
+							connection.transportData(line);
+					}
+					plainInput.close();
+
 				} catch (IOException e) {
 					if (connection != null && interrupted() == false) {
 						connection.transportError(e);
@@ -111,8 +111,8 @@ class XhrTransport implements IOTransport {
 				}
 			}
 			connection.transportDisconnected();
-        }
-    }
+		}
+	}
 
 	/**
 	 * The Class SenderThread.
@@ -129,12 +129,13 @@ class XhrTransport implements IOTransport {
 		}
 
 
-        @Override
-        public void run() {
+		@Override
+		public void run() {
 			while (isConnect()) {
 				try {
 					String line;
-                    sendUrlConnection = setupHttpURLConnection();
+
+					HttpURLConnection sendUrlConnection = setupHttpURLConnection();
 
 					if (!queue.isEmpty()) {
 						sendUrlConnection.setDoOutput(true);
@@ -152,13 +153,14 @@ class XhrTransport implements IOTransport {
 								iter.remove();
 							}
 						}
+						output.close();
 						InputStream input = sendUrlConnection.getInputStream();
 						byte[] buffer = new byte[1024];
-                        int buffer_s;
+						int buffer_s;
 						while((buffer_s = input.read(buffer)) > 0) {
-                            System.out.println("buffer stuff: " + new String(buffer, 0, buffer_s));
 						}
-                    }
+						input.close();
+					}
 				} catch (IOException e) {
 					if (connection != null && interrupted() == false) {
 						connection.transportError(e);
@@ -173,9 +175,9 @@ class XhrTransport implements IOTransport {
 	 * Creates a new Transport for the given url an {@link IOConnection}.
 	 * 
 	 * @param url
-	 *            the url
+	 *			  the url
 	 * @param connection
-	 *            the connection
+	 *			  the connection
 	 * @return the iO transport
 	 */
 	public static IOTransport create(URL url, IOConnection connection) {
@@ -195,9 +197,9 @@ class XhrTransport implements IOTransport {
 	 * Instantiates a new xhr transport.
 	 * 
 	 * @param url
-	 *            the url
+	 *			  the url
 	 * @param connection
-	 *            the connection
+	 *			  the connection
 	 */
 	public XhrTransport(URL url, IOConnection connection) {
 		this.connection = connection;
@@ -213,8 +215,8 @@ class XhrTransport implements IOTransport {
 	public void connect() {
 		this.setConnect(true);
 		sendThread = new SenderThread();
-        sendThread.start();
-        recvThread = new ReceiverThread();
+		sendThread.start();
+		recvThread = new ReceiverThread();
 		recvThread.start();
 	}
 
@@ -227,7 +229,7 @@ class XhrTransport implements IOTransport {
 	public void disconnect() {
 		this.setConnect(false);
 		sendThread.interrupt();
-        recvThread.interrupt();
+		recvThread.interrupt();
 	}
 
 	/*
@@ -283,7 +285,7 @@ class XhrTransport implements IOTransport {
 	 * Sets the connect.
 	 * 
 	 * @param connect
-	 *            the new connect
+	 *			  the new connect
 	 */
 	private synchronized void setConnect(boolean connect) {
 		this.connect = connect;
