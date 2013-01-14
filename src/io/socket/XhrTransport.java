@@ -105,10 +105,6 @@ class XhrTransport implements IOTransport {
 						return;
 					}
 				}
-				try {
-					sleep(100);
-				} catch (InterruptedException e) {
-				}
 			}
 			connection.transportDisconnected();
 		}
@@ -161,6 +157,13 @@ class XhrTransport implements IOTransport {
 						}
 						input.close();
 					}
+                    else {
+                        try {
+                            synchronized(queue) {
+                                queue.wait();
+                            }
+                        } catch (InterruptedException e) {}
+                    }
 				} catch (IOException e) {
 					if (connection != null && interrupted() == false) {
 						connection.transportError(e);
@@ -259,7 +262,10 @@ class XhrTransport implements IOTransport {
 	 */
 	@Override
 	public void sendBulk(String[] texts) throws IOException {
-		queue.addAll(Arrays.asList(texts));
+        synchronized (queue) {
+            queue.addAll(Arrays.asList(texts));
+            queue.notifyAll();
+        }
 	}
 
 	/*
