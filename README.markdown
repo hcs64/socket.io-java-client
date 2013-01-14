@@ -4,21 +4,11 @@
 
 socket.io-java-client is an easy to use implementation of [socket.io](http://socket.io) for Java.
 
-It uses [Weberknecht](http://code.google.com/p/weberknecht/) as transport backend, but it's easy
-to write your own transport. See description below. An XHR-Transport is included, too. But it's
-not functional in its current state.
+Forked to rely on only an improved XHR-Transport, seems to work ok but not heavily tested.
 
 The API is inspired by [java-socket.io.client](https://github.com/benkay/java-socket.io.client).
 
-Features:
-
- * __transparent reconnecting__ - The API cares about re-establishing the connection to the server
-   when the transport is interrupted.
- * __easy to use API__ - implement an interface, instantiate a class - you're done.
- * __output buffer__ - send data while the transport is still connecting. No problem, socket.io-java-client handles that.
- * __meaningful exceptions__ - If something goes wrong, SocketIO tries to throw meaningful exceptions with hints for fixing.
-
-__Status:__ Connecting with Websocket is production ready. XHR is in beta.
+__Status:__ XHR is in beta.
 
 
 ## How to use
@@ -88,18 +78,6 @@ For further informations, read the [Javadoc](http://s01.de/hgexport/socket.io-ja
  * [Class SocketIO](http://s01.de/~tox/socket.io-java-client/io/socket/SocketIO.html)
  * [Interface IOCallback](http://s01.de/~tox/socket.io-java-client/io/socket/IOCallback.html)
  
-## Checkout
-
- * with git
- 
-		git clone git://github.com/Gottox/socket.io-java-client.git
-
- * with mercurial
- 
- 		hg clone https://bitbucket.org/Gottox/socket.io-java-client 
- 
-Both repositories are synchronized and up to date.
-
 ## Building
 
 to build a jar-file:
@@ -109,10 +87,6 @@ to build a jar-file:
 	ls jar/socketio.jar
 
 You'll find the socket.io-jar in jar/socketio.jar 
-
-## Bugs
-
-Please report any bugs feature requests to [the Github issue tracker](https://github.com/Gottox/socket.io-java-client/issues)
 
 ## Frameworks
 
@@ -144,6 +118,3 @@ You need node installed in PATH.
 
 This library is distributed under MIT Licence.
 
-## Sounds so interesting...
-
-You'll find further documentation at the [Socket.io-java-client Github Wiki](https://github.com/Gottox/socket.io-java-client/wiki)
