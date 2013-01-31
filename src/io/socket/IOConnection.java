@@ -38,7 +38,7 @@ import org.json.JSONObject;
  */
 class IOConnection implements IOCallback {
 	/** Debug logger */
-	static final Logger logger = Logger.getLogger("io.socket");
+	public static final Logger logger = Logger.getAnonymousLogger();
 
 	public static final String FRAME_DELIMITER = "\ufffd";
 

@@ -11,6 +11,7 @@ package io.socket;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Properties;
+import java.util.logging.Logger;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
@@ -401,4 +402,9 @@ public class SocketIO {
 			return this.headers.getProperty(key);
 		return null;
 	}
+
+    public static Logger getConnectionLogger() {
+        Logger logger = IOConnection.logger;
+        return logger;
+    }
 }
