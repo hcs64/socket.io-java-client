@@ -100,13 +100,17 @@ class XhrTransport implements IOTransport {
 					plainInput.close();
 
 				} catch (IOException e) {
+					if (connection == null) {
+						return;
+					}
 					if (connection != null && interrupted() == false) {
 						connection.transportError(e);
 						return;
 					}
 				}
 			}
-			connection.transportDisconnected();
+
+			//connection.transportDisconnected();
 		}
 	}
 
@@ -157,18 +161,15 @@ class XhrTransport implements IOTransport {
 						}
 						input.close();
 					}
-                    else {
-                        try {
-                            synchronized(queue) {
-                                queue.wait();
-                            }
-                        } catch (InterruptedException e) {}
-                    }
-				} catch (IOException e) {
-					if (connection != null && interrupted() == false) {
-						connection.transportError(e);
-						return;
+					else {
+						try {
+							synchronized(queue) {
+								queue.wait();
+							}
+						} catch (InterruptedException e) {}
 					}
+				} catch (IOException e) {
+					return;
 				}
 			}
 		}
@@ -231,8 +232,10 @@ class XhrTransport implements IOTransport {
 	@Override
 	public void disconnect() {
 		this.setConnect(false);
-		sendThread.interrupt();
 		recvThread.interrupt();
+		synchronized (queue) {
+			queue.notifyAll();
+		}
 	}
 
 	/*
@@ -262,10 +265,10 @@ class XhrTransport implements IOTransport {
 	 */
 	@Override
 	public void sendBulk(String[] texts) throws IOException {
-        synchronized (queue) {
-            queue.addAll(Arrays.asList(texts));
-            queue.notifyAll();
-        }
+		synchronized (queue) {
+			queue.addAll(Arrays.asList(texts));
+			queue.notifyAll();
+		}
 	}
 
 	/*
